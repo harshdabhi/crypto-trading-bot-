@@ -1,18 +1,3 @@
-import streamlit as st  
-
-st.set_page_config(
-    layout="wide", 
-    page_title="Crypto Trading Bot",
-    page_icon=":bar_chart:",
-    )
-
-st.title("Crypto Trading Bot")
-
-
-
-
-############################################ code logic goes here ############################################
-
 import ccxt
 import datetime
 import pandas as pd
@@ -43,7 +28,6 @@ with open('./file.json') as f:
 # Access the values from the loaded JSON data
 key_value = data["key"]
 secret_value = data["secret"]
-password= data["password"]
 
 
 # Initialize the exchange
@@ -56,7 +40,8 @@ exchange = eval(f'ccxt.{exchange}')({
     'apiKey': key_value,
     'secret': secret_value 
 })
- 
+
+
 
 
 def fetch_price(symbol):
@@ -68,10 +53,6 @@ def check_orders(symbol):
 
 
 def logic_exec(symbol,size,timeframe,price,id):
-
-    if stop:
-        return 0
-
     # Get the OHLCV (Open, High, Low, Close, Volume) data
     ohlcv = exchange.fetch_ohlcv(symbol, timeframe, since=None, limit=300)
 
@@ -93,7 +74,7 @@ def logic_exec(symbol,size,timeframe,price,id):
         if id=='':
             price,_=fetch_price(symbol)
             # order = exchange.create_order (symbol, 'market', 'buy', size,price, params={})
-            order = exchange.create_order (symbol, 'market', 'buy',price, size)
+            order = exchange.create_order(symbol, 'market', 'buy', size)
 
             id=order['info']['orderId']
             print('buy')
@@ -103,7 +84,7 @@ def logic_exec(symbol,size,timeframe,price,id):
     elif latest_val['PSARs_0.06_0.6']>0:
         if id!='':
             size=exchange.fetchBalance(params={'type': 'spot',})[f"{symbol.split('/')[0]}"]['free']
-            order = exchange.create_order(symbol, 'market', 'sell',price, size)
+            order = exchange.create_order (symbol, 'market', 'sell', size)
             id=''
             print('sell')
         print('short execution inlive')
@@ -112,36 +93,19 @@ def logic_exec(symbol,size,timeframe,price,id):
     sns.lineplot(x=df[0],y=df[4],data=df)
     sns.scatterplot(x=df[0],y=d['PSARs_0.06_0.6'],data=df,color='red')
     sns.scatterplot(x=df[0],y=d['PSARl_0.06_0.6'],data=df,color='green')
-    plt.xlabel('Time') 
-    plt.ylabel('Price') 
 
     plt.savefig(f'./images/plot.png')
 
     time.sleep(60)
 
+
+
     return logic_exec(symbol,size,timeframe,price,id)
 
 
+if __name__ == '__main__':
+
+    logic_exec(symbol,size,timeframe,fetch_price(symbol)[0],id='1')
 
 
 # Print the fetched data
-
-pswd=st.text_input(label="pass",type="password")
-print(pswd)
-
-start=st.button("Start Trading!")
-
-if start:
-    stop=False
-    logic_exec(symbol,size,timeframe,fetch_price(symbol)[0],id='')
-    st.write('execution has started')
-
-stop=st.button("Stop Trading!")
-
-
-if stop:
-    print('execution has stopped')
-
-
-st.image('./images/plot.png')
-
