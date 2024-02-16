@@ -93,10 +93,13 @@ def logic_exec(symbol,size,timeframe,price,id):
     sns.lineplot(x=df[0],y=df[4],data=df)
     sns.scatterplot(x=df[0],y=d['PSARs_0.06_0.6'],data=df,color='red')
     sns.scatterplot(x=df[0],y=d['PSARl_0.06_0.6'],data=df,color='green')
+    plt.xlabel('time')
+    plt.ylabel('price')
 
     plt.savefig(f'./images/plot.png')
+    plt.close()
 
-    time.sleep(60)
+    time.sleep(120)
 
 
 
@@ -105,7 +108,7 @@ def logic_exec(symbol,size,timeframe,price,id):
 
 if __name__ == '__main__':
 
-    logic_exec(symbol,size,timeframe,fetch_price(symbol)[0],id='1')
+    logic_exec(symbol,size,timeframe,fetch_price(symbol)[0],id='')
 
 
 # Print the fetched data
