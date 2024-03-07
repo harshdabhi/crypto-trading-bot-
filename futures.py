@@ -17,10 +17,11 @@ import seaborn as sns
 
 exchange='bybit'
 symbol = 'BTC/USDT:USDT'
-timeframe = '1m'  # 1 day : 1D timeframe
+timeframe = '3m'  # 1 day : 1D timeframe
 size=0.001
 limit=5000
-stoploss=50
+stoploss=20
+takeprofit=20
 deviation=1
 unrealisedPnl=0.001
 
@@ -37,8 +38,9 @@ exchange = eval(f'ccxt.{exchange}')({
     'enableRateLimit': True, 
     'options': {
         'adjustForTimeDifference': True,
-        'recvWindow': 5000,
+        'recvWindow': 500000,
         'defaultType': 'swap',    
+        'timeDifference': 5000
     },
     'apiKey': key_value,
     'secret': secret_value 
@@ -47,8 +49,7 @@ exchange = eval(f'ccxt.{exchange}')({
 
 
 def fetch_price(symbol):
-    # price=exchange.fetchTicker(symbol.split(':')[0])['last']
-    price=exchange.fetchOrderBook(symbol)['bids'][0][0]
+    price=exchange.fetchTicker(symbol.split(':')[0])['last']
     return price
     
 
@@ -60,8 +61,7 @@ def get_latest_position(symbol):
     positions = exchange.fetch_positions(symbol)
     contracts = positions[0]['contracts']
     pnl=positions[0]['info']['unrealisedPnl']
-    id=positions[0]['id']
-    return id,contracts,pnl
+    return contracts,pnl
 
 
 def open_long(symbol,amount):
@@ -70,21 +70,15 @@ def open_long(symbol,amount):
     amount=size
     price=fetch_price(symbol)
     params={
-        'stopLoss': {
+        'TakeProfit': {
             'type': 'limit',  # or 'market', this field is not necessary if limit price is specified
-            'price': price-stoploss,  # limit price for a limit stop loss order
-            'triggerPrice': price-stoploss+deviation,
-        },
-        'takeProfit': {
-            'type': 'limit',  # or 'market', this field is not necessary if limit price is specified
-            'price': price+stoploss,  # limit price for a limit take profit order
-            'triggerPrice': price+stoploss-deviation,
+            'price': price+stoploss,  # limit price for a limit stop loss order
+            'triggerPrice': price+stoploss,
         },
         
     }
     order = exchange.create_order(symbol, type, side, amount, price,params)
-    take_profit=price+stoploss
-    return order,take_profit
+    return order
 
 
 def open_short(symbol,amount):
@@ -93,26 +87,20 @@ def open_short(symbol,amount):
     amount=size
     price=fetch_price(symbol)
     params={
-        'stopLoss': {
+        'TakeProfit': {
             'type': 'limit',  # or 'market', this field is not necessary if limit price is specified
-            'price': price+stoploss,  # limit price for a limit stop loss order
-            'triggerPrice': price+stoploss-deviation,
-        },
-        'takeProfit': {
-            'type': 'limit',  # or 'market', this field is not necessary if limit price is specified
-            'price': price-stoploss,  # limit price for a limit take profit order
-            'triggerPrice': price-stoploss+deviation,
+            'price': price-takeprofit,  # limit price for a limit stop loss order
+            'triggerPrice': price-takeprofit+deviation,
         },
         
     }
     order = exchange.create_order(symbol, type, side, amount, price,params)
-    take_profit=price-stoploss
-    return order,take_profit
+    return order
 
 
 
 
-def logic_exec(symbol,size,timeframe,price,id,isLong,isShort,trail_price,takeprofit_price):
+def logic_exec(symbol,size,timeframe,price,id,isLong,isShort):
     # Get the OHLCV (Open, High, Low, Close, Volume) data
     ohlcv = exchange.fetch_ohlcv(symbol, timeframe, since=None, limit=300)
 
@@ -121,6 +109,7 @@ def logic_exec(symbol,size,timeframe,price,id,isLong,isShort,trail_price,takepro
 
     ### PSAR
     d=ta.psar(df[2],df[3],df[4],0.06,0.06,0.6)
+    d1=ta.ema(df[4][-14:-1],13).iloc[-1]
 
     
 
@@ -128,102 +117,69 @@ def logic_exec(symbol,size,timeframe,price,id,isLong,isShort,trail_price,takepro
     latest_val=d.iloc[-1]
 
     ### creating logic
-    position,_,latest_position_detail=get_latest_position(symbol)
+    _,latest_position_detail=get_latest_position(symbol)
 
+    print('program is running')
 
-    try:
-        if latest_val['PSARl_0.06_0.6']>0:
-            if id==None :
-                order,takeprofit_price=open_long(symbol,size)
-                id=order['id']
-                isLong=True
-                print('buy')
+    
+    if latest_val['PSARl_0.06_0.6']>0 and latest_val['PSARr_0.06_0.6']==1:
+        if id==None and df[4].iloc[-1]>d1:
+            order=open_long(symbol,size)
+            id=order['id']
+            isLong=True
+            print('buy')
 
-            
-
-            elif id!=None and isShort:
-                side = 'sell'
-                type='market'
-                price=fetch_price(symbol)
-                params = {
-                    'reduce_only': True
-                }
-                amount=size
-                close_position_order = exchange.createOrder(symbol, type, side, amount, price, params)
-                isLong=False
-                id=None
-                print('Long position close has been placed')
-
-                #####  if condition for stop loss triggers 
-
-                
-        elif latest_val['PSARs_0.06_0.6']>0:
-            if id==None:
-                order,takeprofit_price=open_short(symbol,size)
-                id=order['id']
-                isShort=True
-                print('sell')
-
-        
-
-            elif id!=None and isLong:
-                side = 'buy'
-                type='market'
-                amount=size
-                price=fetch_price(symbol)
-                params = {
-                    'reduce_only': True
-                }
-                close_position_order = exchange.createOrder(symbol, type, side, amount, price, params)
-                isShort=False
-                id=None
-                print('Short position close has been placed')
-    except:
-        pass
-
-
-
-    try:
-        if float(latest_position_detail)>=unrealisedPnl:
+        elif id!=None and isShort:
+            side = 'sell'
+            type='limit'
             price=fetch_price(symbol)
-            
-            if isLong and trail_price<price:
-                exchange.cancel_all_orders(symbol)
-                exchange.createStopLossOrder(symbol, type='market', side='sell', amount=size, price=price, stopLossPrice=price-stoploss+deviation)
-                exchange.createTakeProfitOrder(symbol, type='limit', side='sell', amount=size, price=takeprofit_price, takeProfitPrice=takeprofit_price-deviation)
-                trail_price=price
-                print('stop loss updated for long')
-                
-            elif isShort and trail_price>price:
-                exchange.cancel_all_orders(symbol)
-                exchange.createStopLossOrder(symbol, type='market', side='buy', amount=size, price=price, stopLossPrice=price+stoploss-deviation)
-                exchange.createTakeProfitOrder(symbol, type='limit', side='buy', amount=size, price=takeprofit_price, takeProfitPrice=takeprofit_price+deviation)
-
-                trail_price=price
-                print('stop loss updated for short')
-        
-    except:
-        pass
-    
-    time.sleep(4)
-
-
-    try:
-        x=exchange.fetch_positions(symbol)[0]['side']
-        if x==None:
-            exchange.cancel_all_orders(symbol)
-            print('no position')
-            id=None
+            params = {
+                'reduce_only': True
+            }
+            amount=size
+            exchange.createOrder(symbol, type, side, amount, price, params)
             isLong=False
+            id=None
+            print('Long position close has been placed')
+
+        
+
+
+
+            #####  if condition for stop loss triggers 
+
+            
+    elif latest_val['PSARs_0.06_0.6']>0 and latest_val['PSARr_0.06_0.6']==1:
+        if id==None and df[4].iloc[-1]<d1:
+            order=open_short(symbol,size)
+            id=order['id']
+            isShort=True
+            print('sell')
+
+        elif id!=None and isLong:
+            side = 'buy'
+            type='limit'
+            amount=size
+            price=fetch_price(symbol)
+            params = {
+                'reduce_only': True
+            }
+            exchange.createOrder(symbol, type, side, amount, price, params)
             isShort=False
+            id=None
+            print('Short position close has been placed')
+        
 
-    except:
-        pass
 
+
+
+    time.sleep(5)
 
 
     
-    return logic_exec(symbol,size,timeframe,price,id,isLong,isShort,trail_price,takeprofit_price)
+    return logic_exec(symbol,size,timeframe,price,id,isLong,isShort)
 
+if __name__ == '__main__':
 
-logic_exec(symbol,size,timeframe,fetch_price(symbol),id=None,isLong=False,isShort=False,trail_price=0,takeprofit_price=0)
+    logic_exec(symbol,size,timeframe,fetch_price(symbol),id=None,isLong=False,isShort=False)
+
