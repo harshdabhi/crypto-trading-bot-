@@ -270,7 +270,6 @@ class StreamlitApp:
 
         if self.is_running!=True:
             if st.button("Start Bot"):
-                st.write("Bot is running 🟢")
                 bot_start = bitmex_trading_bot(exchange, symbol, timeframe, size, limit, take_profit, stop_loss)
                 bot_start.logic_exec(None, False, False)
                 self.is_running = True
