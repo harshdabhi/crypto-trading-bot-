@@ -165,7 +165,7 @@ class bitmex_trading_bot:
 
                 while self.exchange_conn.private_get_position({"symbol":self.symbol})[0]['isOpen']!=True:
                     self.exchange_conn.private_delete_order_all({"symbol":self.symbol})
-                    price=self.open_long(self.symbol,self.size)
+                    price=self.open_long()
                     time.sleep(5)
                     print('buy')
 
@@ -188,7 +188,7 @@ class bitmex_trading_bot:
 
                 while(self.exchange_conn.private_get_position({"symbol":self.symbol})[0]['isOpen']):
                     self.exchange_conn.private_delete_order_all({"symbol":self.symbol})
-                    self.close_short(self.symbol,self.size)
+                    self.close_short()
                     time.sleep(5)
 
                 self.isLong=False
@@ -203,7 +203,7 @@ class bitmex_trading_bot:
                 
                 while self.exchange_conn.private_get_position({"symbol":self.symbol})[0]['isOpen']!=True:
                     self.exchange_conn.private_delete_order_all({"symbol":self.symbol})
-                    price=self.open_short(self.symbol,self.size)
+                    price=self.open_short()
                     print('sell')
                     time.sleep(5)
 
@@ -225,7 +225,7 @@ class bitmex_trading_bot:
                 print('Long position close has been placed')
 
                 while(self.exchange_conn.private_get_position({"symbol":self.symbol})[0]['isOpen']):
-                    self.close_long(self.symbol,self.size)
+                    self.close_long()
                     time.sleep(5)
 
                                 
