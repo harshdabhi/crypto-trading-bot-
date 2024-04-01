@@ -3,4 +3,5 @@ pandas
 pandas_ta 
 matplotlib
 seaborn 
-streamlit
+Flask==3.0.2
+Flask-Cors

@@ -13,9 +13,12 @@ import numpy as np
 #visualisation
 import matplotlib.pyplot as plt
 import seaborn as sns
+import threading
 
-#streamlit
-import streamlit as st
+from flask import Flask,render_template
+from flask_cors import CORS
+
+
 
 with open('./file_bitmex.json') as f:
     data = json.load(f)
@@ -28,7 +31,7 @@ with open('./file_bitmex.json') as f:
 class bitmex_trading_bot:
 
 
-    def __init__(self,exchange:str="bitmex",symbol:str="XBTUSDT",timeframe:str="5m",size:int=2000,limit:int=100,takeprofit:float=25,stoploss:float=20):
+    def __init__(self,exchange:str="bitmex",symbol:str="XBTUSDT",timeframe:str="5m",size:int=6000,limit:int=100,takeprofit:float=20,stoploss:float=20):
 
         """
         Initialize the trading bot with default values for the exchange, symbol, timeframe, size, limit, take profit, and stop loss.
@@ -93,13 +96,14 @@ class bitmex_trading_bot:
 
     def open_long(self):
        
-        price=self.fetch_price(self.symbol)
-        self.exchange.privatePostOrder({"symbol":f"{self.symbol}",
+        price=self.fetch_price()
+        deviation=0.1
+        self.exchange_conn.privatePostOrder({"symbol":f"{self.symbol}",
                                 "ordType":"Limit",
                                 "side":"Buy",
                                 "timeInForce":"GTC",
                                 "quantity":f"{self.size}",
-                                "price":f"{price}",
+                                "price":f"{price-deviation}",
                                 "execInst":"ParticipateDoNotInitiate"})
         return price
         
@@ -108,12 +112,13 @@ class bitmex_trading_bot:
 
     def open_short(self):
         price=self.fetch_price()
+        deviation=0.1
         self.exchange_conn.privatePostOrder({"symbol":f"{self.symbol}",
                                 "ordType":"Limit",
                                 "side":"Sell",
                                 "timeInForce":"GTC",
                                 "quantity":f"{self.size}",
-                                "price":f"{price}",
+                                "price":f"{price+deviation}",
                                 "execInst":"ParticipateDoNotInitiate"})
         return price
         
@@ -130,7 +135,7 @@ class bitmex_trading_bot:
         
 
 
-    def     close_long(self):
+    def close_long(self):
         price=self.fetch_price()
         self.exchange_conn.privatePostOrder({"symbol":f"{self.symbol}",
                         "ordType":"Limit",
@@ -151,7 +156,8 @@ class bitmex_trading_bot:
                                         "quantity":f"{self.size}",
                                         "price":f"{price+self.takeprofit}",
                                         "execInst":"ReduceOnly"})
-            self.takeprofit+=1
+
+            self.takeprofit+=10
             time.sleep(2)
 
         
@@ -167,7 +173,7 @@ class bitmex_trading_bot:
                                         "price":f"{price-self.takeprofit}",
                                         "execInst":"ReduceOnly"})
             
-            self.takeprofit+=1
+            self.takeprofit+=10
             time.sleep(2)
 
                     
@@ -185,13 +191,13 @@ class bitmex_trading_bot:
         except:
             return False
 
-
     def pnl_realised_profit(self):
 
         pnl=float(self.exchange_conn.private_get_position({"symbol":self.symbol})[0]['unrealisedPnl'])
         qty=float( self.exchange_conn.private_get_position({"symbol":self.symbol})[0]['currentQty'])
 
         pnl=pnl/float(10**6)
+        qty=qty/float(10**6)
 
         if qty<0:
             qty=qty*-1
@@ -209,7 +215,6 @@ class bitmex_trading_bot:
             return False,None
         
 
-
     def logic_exec(self,id=None,isLong=False,isShort=False):
 
 
@@ -226,15 +231,7 @@ class bitmex_trading_bot:
         d=ta.psar(df[2],df[3],df[4],0.06,0.06,0.6)
         d1=ta.ema(df[4][-14:-1],13).iloc[-1]
 
-        ### plotting chart for visualisation ######
-        plt.figure(figsize=(40,20))
-        sns.lineplot(x=df[0],y=df[4],data=df)
-        sns.scatterplot(x=df[0],y=d['PSARs_0.06_0.6'],data=df,color='red')
-        sns.scatterplot(x=df[0],y=d['PSARl_0.06_0.6'],data=df,color='green')
-        sns.lineplot(x=df[0],y=df['ema'],color='brown')
-        plt.savefig(f'./images/plot.png')
-        plt.close()
-        
+     
 
     ##### getting latest value of candle and PSAR ####
         latest_val=d.iloc[-1]
@@ -246,22 +243,20 @@ class bitmex_trading_bot:
         if latest_val['PSARl_0.06_0.6']>0 and latest_val['PSARr_0.06_0.6']==1:
             if self.id==None and df[4].iloc[-1]>d1 and self.isLong!=True:
                 try:
-                    retries_order=5
+                    retries_order=10
                     while self.check_position()!=True and retries_order>0:
                         self.exchange_conn.private_delete_order_all({"symbol":self.symbol})
                         time.sleep(1)
                         self.open_long()
-                        time.sleep(3)
                         print('buy')
+                        time.sleep(5)
                         retries_order-=1
                         if retries_order==1:
                             raise Exception
 
-
+                    time.sleep(2)
                     self.take_profit_long()
                     
-                    
-
                     self.id=True
                     self.isLong=True
 
@@ -276,9 +271,8 @@ class bitmex_trading_bot:
 
                 while(self.check_position()):
                     self.exchange_conn.private_delete_order_all({"symbol":self.symbol})
-                    time.sleep(1)
                     self.close_short()
-                    time.sleep(3)
+                    time.sleep(5)
 
                 self.isLong=False
                 self.id=None
@@ -291,18 +285,18 @@ class bitmex_trading_bot:
             if self.id==None and df[4].iloc[-1]<d1 and self.isShort!=True:
 
                 try:
-                    retries_order=5
+                    retries_order=10
                 
                     while self.check_position()!=True and retries_order>0:
                         self.exchange_conn.private_delete_order_all({"symbol":self.symbol})
                         time.sleep(1)
                         self.open_short()
                         print('sell')
-                        time.sleep(3)
+                        time.sleep(5)
                         retries_order-=1
                         if retries_order==1:
                             raise Exception
-
+                    time.sleep(2)
                     self.take_profit_short()
                     
 
@@ -319,8 +313,9 @@ class bitmex_trading_bot:
                 print('Long position close has been placed')
 
                 while(self.check_position()):
+                    self.exchange_conn.private_delete_order_all({"symbol":self.symbol})
                     self.close_long()
-                    time.sleep(3)
+                    time.sleep(5)
 
                                 
                 self.isShort=False
@@ -328,7 +323,7 @@ class bitmex_trading_bot:
             
 
 
-
+        print("App is running")
         time.sleep(15)
 
         x=self.check_position()
@@ -354,9 +349,10 @@ class bitmex_trading_bot:
                     
             time.sleep(100)
 
+        #return self.id,self.isLong,self.isShort
         return self.logic_exec(self.id,self.isLong,self.isShort)
+        
     
-
 
 class StreamlitApp:
     def __init__(self):
@@ -365,53 +361,29 @@ class StreamlitApp:
         
 
     def run(self):
-        # if self.is_running:
-        #     st.title("Bitmex Trading Bot")
-        #     exchange = st.text_input("Exchange", value="bitmex", help="Name of the exchange", key="exchange_input")
-        #     symbol = st.text_input("Symbol", value="XBTUSDT", help="Trading symbol", key="symbol_input")
-        #     timeframe = st.text_input("Timeframe", value="5m", help="Timeframe for trading", key="timeframe_input")
-        #     size = st.number_input("Size", value=1000, help="Trade size", key="size_input")
-        #     limit = st.number_input("Limit", value=1000, help="Limit for orders", key="limit_input")
-        #     take_profit = st.number_input("Take Profit", value=20, help="Take profit percentage", key="take_profit_input")
-        #     stop_loss = st.number_input("Stop Loss", value=20, help="Stop loss percentage", key="stop_loss_input")
-
-        #     if st.button("Stop Bot", key="stop_bot_button"):
-        #         self.is_running = False
-        #         st.warning("Bot stopped.")
-        # else:
-        
-        #     if st.button("Start Bot", key="start_bot_button"):
-        #         bot_start = bitmex_trading_bot(exchange,symbol,timeframe,size,limit,take_profit,stop_loss)
-        #         bot_start.is_running = True
-        #         bot_start.logic_exec(None, False, False, None)
-        #         st.success("Bot started successfully.")
-
 
         bot=bitmex_trading_bot()
         bot.logic_exec()
-          
 
 
 
-if __name__ == "__main__":
 
-    max_retries = 5  # Maximum number of retries
-    retries = 0
+app = Flask(__name__)
+CORS(app)
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-    while retries < max_retries:
-        try:
-            app = StreamlitApp()
-            app.run()
-            
-        except Exception as e:
-            print(f"An error occurred: {e}")
-            retries += 1
-            print(f"Retrying in 10 seconds... (Retry {retries}/{max_retries})")
-            time.sleep(10)  # Wait for 10 seconds before retrying
+if __name__ == '__main__':
+    thread=threading.Thread(target=app.run,kwargs={'debug':False, 'host':'0.0.0.0', 'port':8080})
+
+    thread.start()
+
+
+    bot=StreamlitApp()
+    bot.run()
 
     
-
-
 
 
 
