@@ -143,7 +143,7 @@ class bitmex_trading_bot:
         
     def take_profit_long(self):
         price=float(self.exchange_conn.private_get_position({"symbol":self.symbol})[0]['avgEntryPrice'])
-        while self.exchange_conn.fetchOpenOrders(self.symbol)==[]:
+        if self.check_position()==True:
             self.exchange_conn.privatePostOrder({"symbol":f"{self.symbol}",
                                         "ordType":"Limit",
                                         "side":"Sell",
@@ -151,14 +151,14 @@ class bitmex_trading_bot:
                                         "quantity":f"{self.size}",
                                         "price":f"{price+self.takeprofit}",
                                         "execInst":"ReduceOnly"})
-            self.takeprofit+=1
+            
             time.sleep(2)
 
         
 
     def take_profit_short(self):
         price=float(self.exchange_conn.private_get_position({"symbol":self.symbol})[0]['avgEntryPrice'])
-        while self.exchange_conn.fetchOpenOrders(self.symbol)==[]:
+        if self.check_position()==True:
             self.exchange_conn.privatePostOrder({"symbol":f"{self.symbol}",
                                         "ordType":"Limit",
                                         "side":"Buy",
@@ -167,7 +167,7 @@ class bitmex_trading_bot:
                                         "price":f"{price-self.takeprofit}",
                                         "execInst":"ReduceOnly"})
             
-            self.takeprofit+=1
+            
             time.sleep(2)
 
                     
@@ -227,13 +227,13 @@ class bitmex_trading_bot:
         d1=ta.ema(df[4][-14:-1],13).iloc[-1]
 
         ### plotting chart for visualisation ######
-        plt.figure(figsize=(40,20))
-        sns.lineplot(x=df[0],y=df[4],data=df)
-        sns.scatterplot(x=df[0],y=d['PSARs_0.06_0.6'],data=df,color='red')
-        sns.scatterplot(x=df[0],y=d['PSARl_0.06_0.6'],data=df,color='green')
-        sns.lineplot(x=df[0],y=df['ema'],color='brown')
-        plt.savefig(f'./images/plot.png')
-        plt.close()
+        # plt.figure(figsize=(40,20))
+        # sns.lineplot(x=df[0],y=df[4],data=df)
+        # sns.scatterplot(x=df[0],y=d['PSARs_0.06_0.6'],data=df,color='red')
+        # sns.scatterplot(x=df[0],y=d['PSARl_0.06_0.6'],data=df,color='green')
+        # sns.lineplot(x=df[0],y=df['ema'],color='brown')
+        # plt.savefig(f'./images/plot.png')
+        # plt.close()
         
 
     ##### getting latest value of candle and PSAR ####
@@ -246,12 +246,12 @@ class bitmex_trading_bot:
         if latest_val['PSARl_0.06_0.6']>0 and latest_val['PSARr_0.06_0.6']==1:
             if self.id==None and df[4].iloc[-1]>d1 and self.isLong!=True:
                 try:
-                    retries_order=5
+                    retries_order=11
                     while self.check_position()!=True and retries_order>0:
                         self.exchange_conn.private_delete_order_all({"symbol":self.symbol})
                         time.sleep(1)
                         self.open_long()
-                        time.sleep(3)
+                        time.sleep(5)
                         print('buy')
                         retries_order-=1
                         if retries_order==1:
@@ -278,9 +278,10 @@ class bitmex_trading_bot:
                     self.exchange_conn.private_delete_order_all({"symbol":self.symbol})
                     time.sleep(1)
                     self.close_short()
-                    time.sleep(3)
+                    time.sleep(5)
 
                 self.isLong=False
+                self.isShort=False
                 self.id=None
 
             
@@ -291,14 +292,14 @@ class bitmex_trading_bot:
             if self.id==None and df[4].iloc[-1]<d1 and self.isShort!=True:
 
                 try:
-                    retries_order=5
+                    retries_order=11
                 
                     while self.check_position()!=True and retries_order>0:
                         self.exchange_conn.private_delete_order_all({"symbol":self.symbol})
                         time.sleep(1)
                         self.open_short()
                         print('sell')
-                        time.sleep(3)
+                        time.sleep(5)
                         retries_order-=1
                         if retries_order==1:
                             raise Exception
@@ -319,11 +320,13 @@ class bitmex_trading_bot:
                 print('Long position close has been placed')
 
                 while(self.check_position()):
+                    time.sleep(1)
                     self.close_long()
-                    time.sleep(3)
+                    time.sleep(5)
 
                                 
                 self.isShort=False
+                self.isLong=False
                 self.id=None
             
 
