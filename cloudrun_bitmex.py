@@ -30,7 +30,7 @@ with open('./file_bitmex.json') as f:
 
 class bitmex_trading_bot:
 
-    def __init__(self, exchange: str = "bitmex", symbol: str = "XBTUSDT", timeframe: str = "5m", size: int = 6000, limit: int = 100, takeprofit: float = 20, stoploss: float = 20):
+    def __init__(self, exchange: str = "bitmex", symbol: str = "XBTUSDT", timeframe: str = "5m", size: int = 15000, limit: int = 100, takeprofit: float = 20, stoploss: float = 20):
         """
         Initialize the trading bot with default values for the exchange, symbol, timeframe, size, limit, take profit, and stop loss.
 
@@ -375,14 +375,18 @@ if __name__ == '__main__':
 
     retries=5
     while retries>0:
+        running=False
         try:
             thread = threading.Thread(target=app.run, kwargs={
                                     'debug': False, 'host': '0.0.0.0', 'port': 8080})
-
             thread.start()
 
-            bot = StreamlitApp()
-            bot.run()
+
+            if running!=True:
+            
+                bot = StreamlitApp()
+                bot.run()
+                running=True
 
         except Exception as e:
             print(f"An error occurred: {e}")
