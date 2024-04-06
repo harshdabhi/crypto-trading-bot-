@@ -175,7 +175,7 @@ class bitmex_trading_bot:
                                                      "timeInForce": "GTC",
                                                      "quantity": f"{size}",
                                                      "price": f"{price+temp}",
-                                                     "execInst": "ReduceOnly,ParticipateDoNotInitiate"})
+                                                     "execInst": "ReduceOnly"})
 
                 temp += 10
                 time.sleep(2)
@@ -203,7 +203,7 @@ class bitmex_trading_bot:
                                                      "timeInForce": "GTC",
                                                      "quantity": f"{self.size}",
                                                      "price": f"{price-temp}",
-                                                     "execInst": "ReduceOnly,ParticipateDoNotInitiate"})
+                                                     "execInst": "ReduceOnly"})
 
                 temp += 10
                 time.sleep(2)
