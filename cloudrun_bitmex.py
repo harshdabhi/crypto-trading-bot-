@@ -30,7 +30,7 @@ with open('./file_bitmex.json') as f:
 
 class bitmex_trading_bot:
 
-    def __init__(self, exchange: str = "bitmex", symbol: str = "XBTUSDT", timeframe: str = "5m", size: int = 15000, limit: int = 100, takeprofit: float = 20, stoploss: float = 20):
+    def __init__(self, exchange: str = "bitmex", symbol: str = "XBTUSDT", timeframe: str = "5m", size: int = 20000, limit: int = 100, takeprofit: float = 20, stoploss: float = 20):
         """
         Initialize the trading bot with default values for the exchange, symbol, timeframe, size, limit, take profit, and stop loss.
 
@@ -73,13 +73,22 @@ class bitmex_trading_bot:
 
     # fetching the latest price
 
-    def fetch_price(self):
+    def fetch_price(self, type):
         ''' 
         return: float=price
 
         '''
-        price = self.exchange_conn.fetchTicker(
-            self.symbol)['info']['lastPrice']
+        # price = self.exchange_conn.fetchTicker(
+        #     self.symbol)['info']['lastPrice']
+
+        if type == 'long':
+            price = self.exchange_conn.fetch_order_book(
+                self.symbol, limit=2)['bids'][0][0]
+
+        elif type == 'short':
+            price = self.exchange_conn.fetch_order_book(
+                self.symbol, limit=2)['asks'][0][0]
+
         return float(price)
 
     def check_open_orders(self):
@@ -90,7 +99,7 @@ class bitmex_trading_bot:
 
     def open_long(self):
 
-        price = self.fetch_price()
+        price = self.fetch_price('long')
         deviation = 0.1
         self.exchange_conn.privatePostOrder({"symbol": f"{self.symbol}",
                                              "ordType": "Limit",
@@ -102,7 +111,7 @@ class bitmex_trading_bot:
         return price
 
     def open_short(self):
-        price = self.fetch_price()
+        price = self.fetch_price('short')
         deviation = 0.1
         self.exchange_conn.privatePostOrder({"symbol": f"{self.symbol}",
                                              "ordType": "Limit",
@@ -114,22 +123,31 @@ class bitmex_trading_bot:
         return price
 
     def close_short(self):
-        price = self.fetch_price()
+        price = self.fetch_price('long')
+        size = self.exchange_conn.private_get_position(
+            {"symbol": self.symbol})[0]['currentQty']
+        size = float(size)*-1
+
         self.exchange_conn.privatePostOrder({"symbol": f"{self.symbol}",
                                              "ordType": "Limit",
                                              "side": "Buy",
                                              "timeInForce": "GTC",
-                                             "quantity": f"{self.size}",
+                                             "quantity": f"{size}",
                                              "price": f"{price}",
                                              "execInst": "ReduceOnly,ParticipateDoNotInitiate"})
 
     def close_long(self):
-        price = self.fetch_price()
+        price = self.fetch_price('short')
+
+        size = self.exchange_conn.private_get_position(
+            {"symbol": self.symbol})[0]['currentQty']
+        size = float(size)
+
         self.exchange_conn.privatePostOrder({"symbol": f"{self.symbol}",
                                              "ordType": "Limit",
                                              "side": "Sell",
                                              "timeInForce": "GTC",
-                                             "quantity": f"{self.size}",
+                                             "quantity": f"{size}",
                                              "price": f"{price}",
                                              "execInst": "ReduceOnly,ParticipateDoNotInitiate"})
 
@@ -143,17 +161,23 @@ class bitmex_trading_bot:
             price = float(self.exchange_conn.private_get_position(
                 {"symbol": self.symbol})[0]['avgEntryPrice'])
 
+            size = self.exchange_conn.private_get_position(
+                {"symbol": self.symbol})[0]['currentQty']
+            size = float(size)
+
+            temp = self.takeprofit
+
             while self.exchange_conn.fetchOpenOrders(self.symbol) == []:
 
                 self.exchange_conn.privatePostOrder({"symbol": f"{self.symbol}",
                                                     "ordType": "Limit",
                                                      "side": "Sell",
                                                      "timeInForce": "GTC",
-                                                     "quantity": f"{self.size}",
-                                                     "price": f"{price+self.takeprofit}",
-                                                     "execInst": "ReduceOnly"})
+                                                     "quantity": f"{size}",
+                                                     "price": f"{price+temp}",
+                                                     "execInst": "ReduceOnly,ParticipateDoNotInitiate"})
 
-                self.takeprofit += 10
+                temp += 10
                 time.sleep(2)
 
     def take_profit_short(self):
@@ -165,6 +189,12 @@ class bitmex_trading_bot:
             price = float(self.exchange_conn.private_get_position(
                 {"symbol": self.symbol})[0]['avgEntryPrice'])
 
+            size = self.exchange_conn.private_get_position(
+                {"symbol": self.symbol})[0]['currentQty']
+            size = float(size)*-1
+
+            temp = self.takeprofit
+
             while self.exchange_conn.fetchOpenOrders(self.symbol) == []:
 
                 self.exchange_conn.privatePostOrder({"symbol": f"{self.symbol}",
@@ -172,10 +202,10 @@ class bitmex_trading_bot:
                                                      "side": "Buy",
                                                      "timeInForce": "GTC",
                                                      "quantity": f"{self.size}",
-                                                     "price": f"{price-self.takeprofit}",
-                                                     "execInst": "ReduceOnly"})
+                                                     "price": f"{price-temp}",
+                                                     "execInst": "ReduceOnly,ParticipateDoNotInitiate"})
 
-                self.takeprofit += 10
+                temp += 10
                 time.sleep(2)
 
     def check_position(self):
@@ -373,20 +403,19 @@ def index():
 
 if __name__ == '__main__':
 
-    retries=5
-    while retries>0:
-        running=False
+    retries = 5
+    while retries > 0:
+        running = False
         try:
             thread = threading.Thread(target=app.run, kwargs={
-                                    'debug': False, 'host': '0.0.0.0', 'port': 8080})
+                'debug': False, 'host': '0.0.0.0', 'port': 8080})
             thread.start()
 
+            if running != True:
 
-            if running!=True:
-            
                 bot = StreamlitApp()
                 bot.run()
-                running=True
+                running = True
 
         except Exception as e:
             print(f"An error occurred: {e}")
