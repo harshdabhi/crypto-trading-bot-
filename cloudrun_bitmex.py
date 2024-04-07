@@ -361,6 +361,23 @@ class bitmex_trading_bot:
         elif x == True:
             pnl_status, type_to_close = self.pnl_realised_profit()
 
+            qty = float(self.exchange_conn.private_get_position({"symbol": self.symbol})[0]['currentQty'])
+
+            if qty < 0:
+                self.isShort=True
+                self.id=True
+
+            elif qty>0:
+                self.isLong=True
+                self.id=True
+
+            else:
+                self.id=None
+                self.isLong=False
+                self.isShort=False
+                
+
+
             print(pnl_status, type_to_close)
 
             if pnl_status == True:
@@ -375,7 +392,7 @@ class bitmex_trading_bot:
                         self.close_long()
                         time.sleep(5)
 
-            time.sleep(100)
+            time.sleep(200)
 
         # return self.id,self.isLong,self.isShort
         return self.logic_exec(self.id, self.isLong, self.isShort)
