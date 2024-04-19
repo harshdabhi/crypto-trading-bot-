@@ -30,7 +30,7 @@ with open('./file_bitmex.json') as f:
 
 class bitmex_trading_bot:
 
-    def __init__(self, exchange: str = "bitmex", symbol: str = "XBTUSDT", timeframe: str = "5m", size: int = 20000, limit: int = 100, takeprofit: float = 20, stoploss: float = 20):
+    def __init__(self, exchange: str = "bitmex", symbol: str = "XBTUSDT", timeframe: str = "5m", size: int = 250000, limit: int = 100, takeprofit: float = 5, stoploss: float = 20):
         """
         Initialize the trading bot with default values for the exchange, symbol, timeframe, size, limit, take profit, and stop loss.
 
@@ -155,8 +155,7 @@ class bitmex_trading_bot:
 
         if self.check_position() == True:
 
-            self.exchange_conn.private_delete_order_all(
-                {"symbol": f"{self.symbol}"})
+            #self.exchange_conn.private_delete_order_all({"symbol": f"{self.symbol}"})
 
             price = float(self.exchange_conn.private_get_position(
                 {"symbol": self.symbol})[0]['avgEntryPrice'])
@@ -167,18 +166,18 @@ class bitmex_trading_bot:
 
             temp = self.takeprofit
 
-            while self.exchange_conn.fetchOpenOrders(self.symbol) == []:
+            #while self.exchange_conn.fetchOpenOrders(self.symbol) == []:
 
-                self.exchange_conn.privatePostOrder({"symbol": f"{self.symbol}",
-                                                    "ordType": "Limit",
-                                                     "side": "Sell",
-                                                     "timeInForce": "GTC",
-                                                     "quantity": f"{size}",
-                                                     "price": f"{price+temp}",
-                                                     "execInst": "ReduceOnly"})
+            self.exchange_conn.privatePostOrder({"symbol": f"{self.symbol}",
+                                                "ordType": "Limit",
+                                                    "side": "Sell",
+                                                    "timeInForce": "GTC",
+                                                    "quantity": f"{size}",
+                                                    "price": f"{price+temp}",
+                                                    "execInst": "ReduceOnly"})
 
-                temp += 10
-                time.sleep(2)
+                #temp += 2
+            time.sleep(2)
 
     def take_profit_short(self):
 
@@ -195,18 +194,75 @@ class bitmex_trading_bot:
 
             temp = self.takeprofit
 
+            #while self.exchange_conn.fetchOpenOrders(self.symbol) == []:
+
+            self.exchange_conn.privatePostOrder({"symbol": f"{self.symbol}",
+                                                "ordType": "Limit",
+                                                    "side": "Buy",
+                                                    "timeInForce": "GTC",
+                                                    "quantity": f"{self.size}",
+                                                    "price": f"{price-temp}",
+                                                    "execInst": "ReduceOnly"})
+
+                # temp += 2
+
+            time.sleep(2)
+
+    def stop_loss_short(self):
+        if self.check_position() == True:
+            self.exchange_conn.private_delete_order_all(
+                {"symbol": f"{self.symbol}"})
+
+            price = float(self.exchange_conn.private_get_position(
+                {"symbol": self.symbol})[0]['avgEntryPrice'])
+
+            size = self.exchange_conn.private_get_position(
+                {"symbol": self.symbol})[0]['currentQty']
+            size = float(size)*-1
+
+            temp = self.takeprofit
+
             while self.exchange_conn.fetchOpenOrders(self.symbol) == []:
 
-                self.exchange_conn.privatePostOrder({"symbol": f"{self.symbol}",
-                                                    "ordType": "Limit",
+                self.exchange_conn.privatePostOrder({"symbol": "XBTUSDT",
+                                                     "ordType": "StopLimit",
                                                      "side": "Buy",
                                                      "timeInForce": "GTC",
-                                                     "quantity": f"{self.size}",
-                                                     "price": f"{price-temp}",
+                                                     "quantity": f"{size}",
+                                                     "price": f"{price}",
+                                                     "stopPx": f"{price+temp}",
                                                      "execInst": "ReduceOnly"})
 
-                temp += 10
-                time.sleep(2)
+                temp += 2
+                time.sleep(1)
+
+    def stop_loss_long(self):
+        if self.check_position() == True:
+            self.exchange_conn.private_delete_order_all(
+                {"symbol": f"{self.symbol}"})
+
+            price = float(self.exchange_conn.private_get_position(
+                {"symbol": self.symbol})[0]['avgEntryPrice'])
+
+            size = self.exchange_conn.private_get_position(
+                {"symbol": self.symbol})[0]['currentQty']
+            size = float(size)
+
+            temp = self.takeprofit
+
+            while self.exchange_conn.fetchOpenOrders(self.symbol) == []:
+
+                self.exchange_conn.privatePostOrder({"symbol": "XBTUSDT",
+                                                     "ordType": "StopLimit",
+                                                     "side": "Buy",
+                                                     "timeInForce": "GTC",
+                                                     "quantity": f"{size}",
+                                                     "price": f"{price}",
+                                                     "stopPx": f"{price-temp}",
+                                                     "execInst": "ReduceOnly"})
+
+                temp += 2
+                time.sleep(1)
 
     def check_position(self):
         try:
@@ -234,14 +290,18 @@ class bitmex_trading_bot:
         if qty < 0:
             qty = qty*-1
             type_to_close = 'Buy'
-            expected_profit = qty*(self.takeprofit+10.0)
+            expected_profit = qty*(self.takeprofit)
 
         else:
             type_to_close = 'Sell'
-            expected_profit = qty*(self.takeprofit+10.0)
+            expected_profit = qty*(self.takeprofit)
 
         if pnl >= expected_profit:
             return True, type_to_close
+
+        elif pnl <= -expected_profit:
+            return True, type_to_close
+
         else:
             return False, None
 
@@ -270,10 +330,10 @@ class bitmex_trading_bot:
                 try:
                     retries_order = 11
                     while self.check_position() != True and retries_order > 0:
-                        self.exchange_conn.private_delete_order_all(
-                            {"symbol": self.symbol})
+                        self.exchange_conn.private_delete_order_all({"symbol": self.symbol})
                         time.sleep(1)
                         self.open_long()
+                        self.open_short()
                         print('buy')
                         time.sleep(5)
                         retries_order -= 1
@@ -281,6 +341,8 @@ class bitmex_trading_bot:
                             raise Exception
 
                     time.sleep(2)
+
+                    # self.stop_loss_long()
                     self.take_profit_long()
 
                     self.id = True
@@ -316,12 +378,15 @@ class bitmex_trading_bot:
                             {"symbol": self.symbol})
                         time.sleep(1)
                         self.open_short()
+                        self.open_long()
                         print('sell')
                         time.sleep(5)
                         retries_order -= 1
                         if retries_order == 1:
                             raise Exception
                     time.sleep(2)
+
+                    # self.stop_loss_short()
                     self.take_profit_short()
 
                     self.id = True
@@ -352,8 +417,7 @@ class bitmex_trading_bot:
         x = self.check_position()
         print(x)
         if x == False:
-            self.exchange_conn.private_delete_order_all(
-                {"symbol": self.symbol})
+            self.exchange_conn.private_delete_order_all({"symbol": self.symbol})
             self.id = None
             self.isLong = False
             self.isShort = False
@@ -361,38 +425,50 @@ class bitmex_trading_bot:
         elif x == True:
             pnl_status, type_to_close = self.pnl_realised_profit()
 
-            qty = float(self.exchange_conn.private_get_position({"symbol": self.symbol})[0]['currentQty'])
+            qty = float(self.exchange_conn.private_get_position(
+                {"symbol": self.symbol})[0]['currentQty'])
 
             if qty < 0:
-                self.isShort=True
-                self.id=True
+                self.isShort = True
+                self.id = True
 
-            elif qty>0:
-                self.isLong=True
-                self.id=True
+            elif qty > 0:
+                self.isLong = True
+                self.id = True
 
             else:
-                self.id=None
-                self.isLong=False
-                self.isShort=False
-                
-
+                self.id = None
+                self.isLong = False
+                self.isShort = False
 
             print(pnl_status, type_to_close)
 
             if pnl_status == True:
                 if type_to_close == 'Buy':
+                    retry_no = 50
                     while self.check_position() != False:
                         self.close_short()
                         time.sleep(5)
+                        self.exchange_conn.private_delete_order_all({"symbol": self.symbol})
+                        
                         print('close short')
+                        retry_no -= 1
+
+                        if retry_no == 1:
+                            break
 
                 elif type_to_close == 'Sell':
+                    retry_no = 50
                     while self.check_position() != False:
+                        self.exchange_conn.private_delete_order_all({"symbol": self.symbol})
                         self.close_long()
                         time.sleep(5)
+                        print('close short')
+                        retry_no -= 1
+                        if retry_no == 1:
+                            break
 
-            time.sleep(200)
+            # time.sleep(30)
 
         # return self.id,self.isLong,self.isShort
         return self.logic_exec(self.id, self.isLong, self.isShort)
