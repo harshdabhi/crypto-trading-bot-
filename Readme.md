@@ -10,4 +10,4 @@ upload file name: file_bitmex.json
 
 ## Run the final.py file
 
-cmd: python final.py
+cmd: python cloudrun_bitmex.py
